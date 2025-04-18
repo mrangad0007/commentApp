@@ -31,7 +31,6 @@ const initialComments = [
 // Action Creators
 export const fetchComments = () => async (dispatch) => {
   try {
-    // In a real app, we would fetch from API here
     dispatch({
       type: FETCH_COMMENTS,
       payload: initialComments,
@@ -41,14 +40,36 @@ export const fetchComments = () => async (dispatch) => {
   }
 };
 
-export const rateComment = (commentId, rating) => ({
-  type: RATE_COMMENT,
-  payload: { commentId, rating },
-});
+export const rateComment = (commentId, rating) => async (dispatch, getState) => {
+  try {
+    // First dispatch the rating change
+    dispatch({
+      type: RATE_COMMENT,
+      payload: { commentId, rating },
+    });
+
+    // Get the updated state
+    const { comments } = getState().comments;
+    
+    // Save to AsyncStorage
+    await AsyncStorage.setItem('comments', JSON.stringify(comments));
+    
+    // Confirm save was successful
+    dispatch({
+      type: SAVE_COMMENTS,
+      payload: comments,
+    });
+  } catch (error) {
+    console.error('Error rating comment:', error);
+  }
+};
 
 export const saveComments = (comments) => async (dispatch) => {
   try {
+    // Save to AsyncStorage first
     await AsyncStorage.setItem('comments', JSON.stringify(comments));
+    
+    // Then update Redux state
     dispatch({
       type: SAVE_COMMENTS,
       payload: comments,
@@ -62,12 +83,28 @@ export const loadSavedComments = () => async (dispatch) => {
   try {
     const savedComments = await AsyncStorage.getItem('comments');
     if (savedComments) {
-      dispatch({
-        type: LOAD_SAVED_COMMENTS,
-        payload: JSON.parse(savedComments),
-      });
+      const parsedComments = JSON.parse(savedComments);
+      if (Array.isArray(parsedComments) && parsedComments.length > 0) {
+        dispatch({
+          type: LOAD_SAVED_COMMENTS,
+          payload: parsedComments,
+        });
+        return parsedComments;
+      }
     }
+    // If no valid saved comments, load initial
+    dispatch({
+      type: FETCH_COMMENTS,
+      payload: initialComments,
+    });
+    return initialComments;
   } catch (error) {
     console.error('Error loading saved comments:', error);
+    // On error, load initial comments
+    dispatch({
+      type: FETCH_COMMENTS,
+      payload: initialComments,
+    });
+    return initialComments;
   }
 }; 
